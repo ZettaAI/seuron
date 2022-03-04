@@ -24,23 +24,21 @@ from param_default import synaptor_param_default  # , check_worker_image_labels
 from param_default import default_args, default_mount_path
 
 
-# hard-coding this for now
+# hard-coding these for now
 MAX_CLUSTER_SIZE = 10
-default_synaptor_workspace = "/Synaptor/task_scripts"
+MOUNT_PATH = "/root/cloudvolume/.secrets"
+SYNAPTOR_IMAGE = "nicholasturner/synaptor:nazgul"
+TASK_QUEUE_NAME = "synaptor"
+default_synaptor_workspace = "/Synaptor/scripts"
 
 # Processing parameters
 # need to set a default so any airflow container can parse the dag (?)
-Variable.setdefault("synaptor_param", synaptor_param_default,
-                    deserialize_json=True)
-param = Variable.get("synaptor_param", deserialize_json=True)
+Variable.setdefault("synaptor_param", "")
+param = Variable.get("synaptor_param", deserialize_json=False)
 
 
 # Python callables (for PythonOperators)
-def sanity_check_op() -> None:
-    """Checks the uploaded processing parameters for problems."""
-    pass
-
-
+# These aren't critical, so they're just placeholders for now
 def generate_ngl_link_op() -> None:
     """Generates a neuroglancer link to view the results."""
     pass
@@ -55,60 +53,65 @@ def check_image_labels_op(junk) -> None:
 
 
 # Op functions
-def synaptor_op(dag: DAG, param: dict, queue: str, i: int) -> Operator:
-    """Runs a synaptor worker until it receives a kill task."""
-    from airflow import configuration as conf
-    broker_url = conf.get("celery", "broker_url")
+def sanity_check_op(dag: DAG, queue: str) -> Operator:
+    """Checks the uploaded processing parameters for problems."""
+    config_path = os.path.join(MOUNT_PATH, "synaptor_param")
+    command = f"sanity_check {config_path}"
 
-    workspace_path = param.get("WORKSPACE_PATH", default_synaptor_workspace)
-    script_path = os.path.join(workspace_path, "worker.py")
-
-    command = f'/bin/sh -c "python -u {script_path} {broker_url} 900"'
-
-    # picking which variables to mount in the containers and where to put them
+    # these variables will be mounted in the containers
     variables = ["synaptor_param"]
-    if "MOUNT_SECRETS" in param:
-        variables += param["MOUNT_SECRETS"]
-    mount_point = param.get("MOUNT_PATH", default_mount_path)
 
     return worker_op(
-               variables=variables, mount_point=mount_point,
-               task_id=f"worker_{i}", command=command,
-               force_pull=True, on_retry_callback=task_retry_alert,
-               image=param["SYNAPTOR_IMAGE"], priority_weight=100_000,
+               variables=variables, mount_point=MOUNT_PATH,
+               task_id="sanity_check", command=command,
+               force_pull=True, on_failure_callback=task_failure_alert,
+               image=SYNAPTOR_IMAGE, priority_weight=100_000,
                weight_rule=WeightRule.ABSOLUTE, queue=queue, dag=dag)
 
 
-def drain_tasks_op() -> Operator:
-    """Drains any tasks sitting in the queue. Skipping this for now"""
-    pass
-
-
-def generate_tasks_op(dag: DAG,
-                      taskname: str,
-                      queue: str = "manager"
-                      ) -> Operator:
+def generate_op(dag: DAG,
+                taskname: str,
+                op_queue_name: str = "manager",
+                task_queue_name: str = TASK_QUEUE_NAME,
+                ) -> Operator:
     """Generates tasks to run and adds them to the RabbitMQ."""
     from airflow import configuration as conf
     broker_url = conf.get("celery", "broker_url")
 
-    workspace_path = param.get("WORKSPACE_PATH", default_synaptor_workspace)
-    script_path = os.path.join(workspace_path, "generator.py")
+    command = (f"generate {taskname} {config_path}"
+               f" {broker_url} {task_queue_name}")
 
-    command = f'/bin/sh -c "python -u {script_path} {taskname} {broker_url}"'
-
-    # picking which variables to mount in the containers and where to put them
+    # these variables will be mounted in the containers
     variables = ["synaptor_param"]
-    if "MOUNT_SECRETS" in param:
-        variables += param["MOUNT_SECRETS"]
-    mount_point = param.get("MOUNT_PATH", default_mount_path)
 
     return worker_op(
-               variables=variables, mount_point=mount_point,
+               variables=variables, mount_point=MOUNT_PATH,
                task_id=f"generate_{taskname}", command=command,
                force_pull=True, on_failure_callback=task_failure_alert,
-               image=param["SYNAPTOR_IMAGE"], priority_weight=100_000,
+               image=SYNAPTOR_IMAGE, priority_weight=100_000,
                weight_rule=WeightRule.ABSOLUTE, queue=queue, dag=dag)
+
+
+def worker_op(dag: DAG,
+              i: int,
+              op_queue_name: str = "worker",
+              task_queue_name: str = TASK_QUEUE_NAME,
+              ) -> Operator:
+    """Runs a synaptor worker until it receives a kill task."""
+    from airflow import configuration as conf
+    broker_url = conf.get("celery", "broker_url")
+
+    command = f"worker {broker_url} {task_queue_name}"
+
+    # these variables will be mounted in the containers
+    variables = ["synaptor_param"]
+
+    return worker_op(
+               variables=variables, mount_point=MOUNT_PATH,
+               task_id=f"worker_{i}", command=command,
+               force_pull=True, on_retry_callback=task_retry_alert,
+               image=SYNAPTOR_IMAGE, priority_weight=100_000,
+               weight_rule=WeightRule.ABSOLUTE, queue=op_queue_name, dag=dag)
 
 
 def wait_op(dag: DAG, taskname: str) -> Operator:
@@ -116,11 +119,16 @@ def wait_op(dag: DAG, taskname: str) -> Operator:
     return PythonOperator(
                task_id=f"wait_for_queue_{taskname}",
                python_callable=check_queue,
-               op_args=("synaptor",),
+               op_args=(TASK_QUEUE_NAME,),
                priority_weight=100_000,
                weight_rule=WeightRule.ABSOLUTE,
                queue="manager",
                dag=dag)
+
+
+def drain_tasks_op() -> Operator:
+    """Drains any tasks sitting in the queue. Skipping this for now"""
+    pass
 
 
 # DAG creation
@@ -132,24 +140,17 @@ generator_default_args = {
     "retries": 0,
 }
 
-dag_generator = DAG("synaptor_generator",
+dag_generator = DAG("synaptor_sanity_check",
                     default_args=generator_default_args,
                     schedule_interval=None)
-dag_worker = DAG("synaptor_worker",
-                 default_args=default_args,
-                 schedule_interval=None)
+#dag_worker = DAG("synaptor_worker",
+#                 default_args=default_args,
+#                 schedule_interval=None)
 
 
 # Instantiating ops within DAGs
 ## Meta-stuff (cluster management & checks)
-sanity_check = PythonOperator(
-    task_id="sanity_check",
-    python_callable=sanity_check_op,
-    priority_weight=100_000,
-    on_failure_callback=task_failure_alert,
-    weight_rule=WeightRule.ABSOLUTE,
-    queue="manager",
-    dag=dag_generator)
+sanity_check = sanity_check_op(dag_generator, "manager")
 
 check_image_labels = PythonOperator(
     task_id="check_image_labels",
@@ -168,33 +169,33 @@ generate_ngl_link = PythonOperator(
     queue="manager",
     dag=dag_generator)
 
-scale_up_cluster = scale_up_cluster_op(
-        dag_worker, "synaptor", "cpu", 1, MAX_CLUSTER_SIZE, "cluster")
-scale_down_cluster = scale_down_cluster_op(
-        dag_worker, "synaptor", "cpu", 0, "cluster")
+# scale_up_cluster = scale_up_cluster_op(
+#         dag_worker, "synaptor", "cpu", 1, MAX_CLUSTER_SIZE, "cluster")
+# scale_down_cluster = scale_down_cluster_op(
+#         dag_worker, "synaptor", "cpu", 0, "cluster")
 
 ## Actual work ops
-workers = [synaptor_op(dag_worker, i) for i in range(MAX_CLUSTER_SIZE)]
-
-generate_chunk_ccs = generate_tasks_op(dag_generator, "chunk_ccs")
-wait_chunk_ccs = wait_op(dag_generator, "chunk_ccs")
-
-generate_merge_segs = generate_tasks_op(dag_generator, "merge_segs")
-wait_merge_segs = wait_op(dag_generator, "merge_segs")
-
-generate_remap = generate_tasks_op(dag_generator, "remap")
-wait_remap = wait_op(dag_generator, "remap")
-
-generate_kill = generate_tasks_op(dag_generator, "kill")
+# workers = [synaptor_op(dag_worker, i) for i in range(MAX_CLUSTER_SIZE)]
+# 
+# generate_chunk_ccs = generate_tasks_op(dag_generator, "chunk_ccs")
+# wait_chunk_ccs = wait_op(dag_generator, "chunk_ccs")
+# 
+# generate_merge_segs = generate_tasks_op(dag_generator, "merge_segs")
+# wait_merge_segs = wait_op(dag_generator, "merge_segs")
+# 
+# generate_remap = generate_tasks_op(dag_generator, "remap")
+# wait_remap = wait_op(dag_generator, "remap")
+# 
+# generate_kill = generate_tasks_op(dag_generator, "kill")
 
 
 # Setting up dependencies
 ## Worker dag
-scale_up_cluster >> workers >> scale_down_cluster
+#scale_up_cluster >> workers >> scale_down_cluster
 
-## Generator/task dag
-(sanity_check >> check_image_labels  # >> drain_tasks  # skipping drain for now
- >> generate_chunk_ccs >> wait_chunk_ccs
- >> generate_merge_segs >> wait_merge_segs
- >> generate_remap >> wait_remap
- >> generate_kill >> generate_ngl_link)
+## Generator/task dag - effectively making this a no-op dag for now
+(sanity_check >> check_image_labels)  # >> drain_tasks  # skipping drain for now
+# >> generate_chunk_ccs >> wait_chunk_ccs
+# >> generate_merge_segs >> wait_merge_segs
+# >> generate_remap >> wait_remap
+# >> generate_kill >> generate_ngl_link)
