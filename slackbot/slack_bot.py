@@ -185,6 +185,7 @@ def download_file(msg):
         else:
             return None, None
 
+
 def download_json(msg):
     filetype, content = download_file(msg)
     if not content:
@@ -278,6 +279,26 @@ def update_param(msg, advanced=False):
             replyto(msg, "Busy right now")
 
     return
+
+
+def update_synaptor_params(msg):
+    """Parses the synaptor configuration file to check for simple errors."""
+    # Current file format is ini/toml, not json
+    _, content = download_file(msg)
+
+    if content is not None:  # download_file returns None if there's a problem
+        if check_running():
+            replyto(msg, "Busy right now")
+            return
+
+        replyto(msg, "Running synator sanity check. Please wait.")
+
+        update_metadata(msg)
+        set_variable("synaptor_param", content)
+        synaptor_sanity_check()
+
+    else:
+        replyto(msg, "Error reading file")
 
 
 def run_igneous_scripts(msg):
@@ -456,6 +477,8 @@ def dispatch_command(cmd, msg):
             update_metadata(msg)
             param_updated = False
             run_contact_surface()
+    elif cmd == "updatesynaptorparams":
+        update_synaptor_params(msg)
     else:
         replyto(msg, "Sorry I do not understand, please try again.")
 
