@@ -77,6 +77,7 @@ def generate_op(dag: DAG,
     """Generates tasks to run and adds them to the RabbitMQ."""
     from airflow import configuration as conf
     broker_url = conf.get("celery", "broker_url")
+    config_path = os.path.join(MOUNT_PATH, "synaptor_param")
 
     command = (f"generate {taskname} {config_path}"
                f" {broker_url} {task_queue_name}")
@@ -89,14 +90,14 @@ def generate_op(dag: DAG,
                task_id=f"generate_{taskname}", command=command,
                force_pull=True, on_failure_callback=task_failure_alert,
                image=SYNAPTOR_IMAGE, priority_weight=100_000,
-               weight_rule=WeightRule.ABSOLUTE, queue=queue, dag=dag)
+               weight_rule=WeightRule.ABSOLUTE, queue=op_queue_name, dag=dag)
 
 
-def worker_op(dag: DAG,
-              i: int,
-              op_queue_name: str = "worker",
-              task_queue_name: str = TASK_QUEUE_NAME,
-              ) -> Operator:
+def synaptor_op(dag: DAG,
+                i: int,
+                op_queue_name: str = "worker",
+                task_queue_name: str = TASK_QUEUE_NAME,
+                ) -> Operator:
     """Runs a synaptor worker until it receives a kill task."""
     from airflow import configuration as conf
     broker_url = conf.get("celery", "broker_url")
@@ -176,16 +177,16 @@ generate_ngl_link = PythonOperator(
 
 ## Actual work ops
 # workers = [synaptor_op(dag_worker, i) for i in range(MAX_CLUSTER_SIZE)]
-# 
+#
 # generate_chunk_ccs = generate_tasks_op(dag_generator, "chunk_ccs")
 # wait_chunk_ccs = wait_op(dag_generator, "chunk_ccs")
-# 
+#
 # generate_merge_segs = generate_tasks_op(dag_generator, "merge_segs")
 # wait_merge_segs = wait_op(dag_generator, "merge_segs")
-# 
+#
 # generate_remap = generate_tasks_op(dag_generator, "remap")
 # wait_remap = wait_op(dag_generator, "remap")
-# 
+#
 # generate_kill = generate_tasks_op(dag_generator, "kill")
 
 
@@ -194,7 +195,7 @@ generate_ngl_link = PythonOperator(
 #scale_up_cluster >> workers >> scale_down_cluster
 
 ## Generator/task dag - effectively making this a no-op dag for now
-(sanity_check >> check_image_labels)  # >> drain_tasks  # skipping drain for now
+(sanity_check >> check_image_labels)  # >> drain_tasks # skipping drain for now
 # >> generate_chunk_ccs >> wait_chunk_ccs
 # >> generate_merge_segs >> wait_merge_segs
 # >> generate_remap >> wait_remap
