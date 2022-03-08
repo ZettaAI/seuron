@@ -28,7 +28,7 @@ from param_default import default_args, default_mount_path
 # hard-coding these for now
 MAX_CLUSTER_SIZE = 10
 MOUNT_PATH = "/root/cloudvolume/.secrets"
-SYNAPTOR_IMAGE = "nicholasturner/synaptor:nazgul"
+SYNAPTOR_IMAGE = "gcr.io/zetta-lee-fly-vnc-001/synaptor:nazgul"
 TASK_QUEUE_NAME = "synaptor"
 default_synaptor_workspace = "/Synaptor/scripts"
 
