@@ -7,7 +7,8 @@ import string
 from airflow_api import get_variable, run_segmentation, \
     update_slack_connection, check_running, dag_state, set_variable, \
     sanity_check, chunkflow_set_env, run_inference, run_contact_surface, \
-    mark_dags_success, run_dag, run_igneous_tasks, run_custom_tasks
+    mark_dags_success, run_dag, run_igneous_tasks, run_custom_tasks, \
+    synaptor_sanity_check
 from bot_info import slack_token, botid, workerid, broker_url
 from kombu_helper import drain_messages
 from google_metadata import get_project_data, get_instance_data, get_instance_metadata, set_instance_metadata, gce_external_ip
