@@ -17,10 +17,11 @@ from airflow.models import Variable, BaseOperator as Operator
 
 from worker_op import worker_op
 from igneous_and_cloudvolume import check_queue
+
 # from helper_ops import mark_done_op, slack_message_op
 from slack_message import task_retry_alert, task_failure_alert
 from helper_ops import scale_up_cluster_op, scale_down_cluster_op
-from param_default import synaptor_param_default  # , check_worker_image_labels
+# from param_default import synaptor_param_default, check_worker_image_labels
 from param_default import default_args, default_mount_path
 
 
@@ -62,44 +63,61 @@ def sanity_check_op(dag: DAG, queue: str) -> Operator:
     variables = ["synaptor_param"]
 
     return worker_op(
-               variables=variables, mount_point=MOUNT_PATH,
-               task_id="sanity_check", command=command,
-               force_pull=True, on_failure_callback=task_failure_alert,
-               image=SYNAPTOR_IMAGE, priority_weight=100_000,
-               weight_rule=WeightRule.ABSOLUTE, queue=queue, dag=dag)
+        variables=variables,
+        mount_point=MOUNT_PATH,
+        task_id="sanity_check",
+        command=command,
+        force_pull=True,
+        on_failure_callback=task_failure_alert,
+        image=SYNAPTOR_IMAGE,
+        priority_weight=100_000,
+        weight_rule=WeightRule.ABSOLUTE,
+        queue=queue,
+        dag=dag,
+    )
 
 
-def generate_op(dag: DAG,
-                taskname: str,
-                op_queue_name: str = "manager",
-                task_queue_name: str = TASK_QUEUE_NAME,
-                ) -> Operator:
+def generate_op(
+    dag: DAG,
+    taskname: str,
+    op_queue_name: str = "manager",
+    task_queue_name: str = TASK_QUEUE_NAME,
+) -> Operator:
     """Generates tasks to run and adds them to the RabbitMQ."""
     from airflow import configuration as conf
+
     broker_url = conf.get("celery", "broker_url")
     config_path = os.path.join(MOUNT_PATH, "synaptor_param")
 
-    command = (f"generate {taskname} {config_path}"
-               f" {broker_url} {task_queue_name}")
+    command = f"generate {taskname} {config_path}" f" {broker_url} {task_queue_name}"
 
     # these variables will be mounted in the containers
     variables = ["synaptor_param"]
 
     return worker_op(
-               variables=variables, mount_point=MOUNT_PATH,
-               task_id=f"generate_{taskname}", command=command,
-               force_pull=True, on_failure_callback=task_failure_alert,
-               image=SYNAPTOR_IMAGE, priority_weight=100_000,
-               weight_rule=WeightRule.ABSOLUTE, queue=op_queue_name, dag=dag)
+        variables=variables,
+        mount_point=MOUNT_PATH,
+        task_id=f"generate_{taskname}",
+        command=command,
+        force_pull=True,
+        on_failure_callback=task_failure_alert,
+        image=SYNAPTOR_IMAGE,
+        priority_weight=100_000,
+        weight_rule=WeightRule.ABSOLUTE,
+        queue=op_queue_name,
+        dag=dag,
+    )
 
 
-def synaptor_op(dag: DAG,
-                i: int,
-                op_queue_name: str = "worker",
-                task_queue_name: str = TASK_QUEUE_NAME,
-                ) -> Operator:
+def synaptor_op(
+    dag: DAG,
+    i: int,
+    op_queue_name: str = "worker",
+    task_queue_name: str = TASK_QUEUE_NAME,
+) -> Operator:
     """Runs a synaptor worker until it receives a kill task."""
     from airflow import configuration as conf
+
     broker_url = conf.get("celery", "broker_url")
 
     command = f"worker {broker_url} {task_queue_name}"
@@ -108,23 +126,31 @@ def synaptor_op(dag: DAG,
     variables = ["synaptor_param"]
 
     return worker_op(
-               variables=variables, mount_point=MOUNT_PATH,
-               task_id=f"worker_{i}", command=command,
-               force_pull=True, on_retry_callback=task_retry_alert,
-               image=SYNAPTOR_IMAGE, priority_weight=100_000,
-               weight_rule=WeightRule.ABSOLUTE, queue=op_queue_name, dag=dag)
+        variables=variables,
+        mount_point=MOUNT_PATH,
+        task_id=f"worker_{i}",
+        command=command,
+        force_pull=True,
+        on_retry_callback=task_retry_alert,
+        image=SYNAPTOR_IMAGE,
+        priority_weight=100_000,
+        weight_rule=WeightRule.ABSOLUTE,
+        queue=op_queue_name,
+        dag=dag,
+    )
 
 
 def wait_op(dag: DAG, taskname: str) -> Operator:
     """Waits for a task to finish."""
     return PythonOperator(
-               task_id=f"wait_for_queue_{taskname}",
-               python_callable=check_queue,
-               op_args=(TASK_QUEUE_NAME,),
-               priority_weight=100_000,
-               weight_rule=WeightRule.ABSOLUTE,
-               queue="manager",
-               dag=dag)
+        task_id=f"wait_for_queue_{taskname}",
+        python_callable=check_queue,
+        op_args=(TASK_QUEUE_NAME,),
+        priority_weight=100_000,
+        weight_rule=WeightRule.ABSOLUTE,
+        queue="manager",
+        dag=dag,
+    )
 
 
 def drain_tasks_op() -> Operator:
@@ -141,10 +167,10 @@ generator_default_args = {
     "retries": 0,
 }
 
-dag_generator = DAG("synaptor_sanity_check",
-                    default_args=generator_default_args,
-                    schedule_interval=None)
-#dag_worker = DAG("synaptor_worker",
+dag_generator = DAG(
+    "synaptor_sanity_check", default_args=generator_default_args, schedule_interval=None
+)
+# dag_worker = DAG("synaptor_worker",
 #                 default_args=default_args,
 #                 schedule_interval=None)
 
@@ -160,7 +186,8 @@ check_image_labels = PythonOperator(
     on_failure_callback=task_failure_alert,
     weight_rule=WeightRule.ABSOLUTE,
     queue="manager",
-    dag=dag_generator)
+    dag=dag_generator,
+)
 
 generate_ngl_link = PythonOperator(
     task_id="generate_ng_link",
@@ -168,7 +195,8 @@ generate_ngl_link = PythonOperator(
     priority_weight=100_000,
     weight_rule=WeightRule.ABSOLUTE,
     queue="manager",
-    dag=dag_generator)
+    dag=dag_generator,
+)
 
 # scale_up_cluster = scale_up_cluster_op(
 #         dag_worker, "synaptor", "cpu", 1, MAX_CLUSTER_SIZE, "cluster")
@@ -192,7 +220,7 @@ generate_ngl_link = PythonOperator(
 
 # Setting up dependencies
 ## Worker dag
-#scale_up_cluster >> workers >> scale_down_cluster
+# scale_up_cluster >> workers >> scale_down_cluster
 
 ## Generator/task dag - effectively making this a no-op dag for now
 (sanity_check >> check_image_labels)  # >> drain_tasks # skipping drain for now
