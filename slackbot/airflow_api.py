@@ -96,7 +96,12 @@ def sanity_check():
 
 def synaptor_sanity_check():
     """Runs the synaptor sanity check DAG."""
-    trigger_or_clear_dag("synaptor_sanity_check")
+    run_dag("synaptor_sanity_check")
+
+
+def run_synaptor_file_seg():
+    """Runs the synaptor sanity check DAG."""
+    run_dag("synaptor_file_seg")
 
 
 def chunkflow_set_env():

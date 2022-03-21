@@ -8,7 +8,7 @@ from airflow_api import get_variable, run_segmentation, \
     update_slack_connection, check_running, dag_state, set_variable, \
     sanity_check, chunkflow_set_env, run_inference, run_contact_surface, \
     mark_dags_success, run_dag, run_igneous_tasks, run_custom_tasks, \
-    synaptor_sanity_check
+    synaptor_sanity_check, run_synaptor_file_seg
 from bot_info import slack_token, botid, workerid, broker_url
 from kombu_helper import drain_messages
 from google_metadata import get_project_data, get_instance_data, get_instance_metadata, set_instance_metadata, gce_external_ip
@@ -133,6 +133,7 @@ def cancel_run(msg):
     drain_messages(broker_url, "custom-cpu")
     drain_messages(broker_url, "custom-gpu")
     drain_messages(broker_url, "chunkflow")
+    drain_messages(broker_url, "synaptor")
 
     time.sleep(30)
 
@@ -292,7 +293,7 @@ def update_synaptor_params(msg):
             replyto(msg, "Busy right now")
             return
 
-        replyto(msg, "Running synator sanity check. Please wait.")
+        replyto(msg, "Running synaptor sanity check. Please wait.")
 
         update_metadata(msg)
         set_variable("synaptor_param", content)
@@ -300,6 +301,17 @@ def update_synaptor_params(msg):
 
     else:
         replyto(msg, "Error reading file")
+
+
+def synaptor_file_seg(msg):
+    """Runs the file segmentation DAG."""
+    if check_running():
+        replyto(msg, "Busy right now")
+        return
+
+    replyto(msg, "Running synaptor file segmentation. Please wait.")
+    create_run_token(msg)
+    run_synaptor_file_seg()
 
 
 def run_igneous_scripts(msg):
@@ -478,8 +490,12 @@ def dispatch_command(cmd, msg):
             update_metadata(msg)
             param_updated = False
             run_contact_surface()
-    elif cmd == "updatesynaptorparams":
+    elif cmd in ["updatesynaptorparams", "updatesynaptorparameters"]:
         update_synaptor_params(msg)
+    elif cmd in ["runsynaptorfileseg",
+                 "runsynaptorsegmentation(file)",
+                 "runsynaptorfilesegmentation"]:
+        synaptor_file_seg(msg)
     else:
         replyto(msg, "Sorry I do not understand, please try again.")
 
