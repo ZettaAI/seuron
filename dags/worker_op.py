@@ -10,6 +10,7 @@ def worker_op(**kwargs):
         default_args=kwargs.get("default_args", {}),
         on_failure_callback=kwargs.get("on_failure_callback", None),
         on_retry_callback=kwargs.get("on_retry_callback", None),
+        on_success_callback=kwargs.get("on_success_callback", None),
         image=kwargs["image"],
         priority_weight=kwargs.get("priority_weight", 1),
         weight_rule=kwargs["weight_rule"],
