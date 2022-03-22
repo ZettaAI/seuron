@@ -17,4 +17,5 @@ def worker_op(**kwargs):
         execution_timeout=kwargs.get("execution_timeout", None),
         queue=kwargs["queue"],
         dag=kwargs["dag"],
+        qos=kwargs.get("qos", True),
     )
