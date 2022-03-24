@@ -104,6 +104,16 @@ def run_synaptor_file_seg():
     run_dag("synaptor_file_seg")
 
 
+def run_synaptor_db_seg():
+    """Runs the synaptor sanity check DAG."""
+    run_dag("synaptor_db_seg")
+
+
+def run_synaptor_assignment():
+    """Runs the synaptor sanity check DAG."""
+    run_dag("synaptor_assignment")
+
+
 def chunkflow_set_env():
     dag_id = "chunkflow_generator"
     trigger_or_clear_dag(dag_id)

@@ -1,5 +1,6 @@
 """Operator functions for synaptor DAGs."""
 import os
+from typing import Optional
 
 from airflow import DAG
 from airflow.utils.weight_rule import WeightRule
@@ -10,7 +11,7 @@ from worker_op import worker_op
 from igneous_and_cloudvolume import check_queue
 
 # from helper_ops import mark_done_op, slack_message_op
-from slack_message import task_retry_alert, task_failure_alert, task_done_alert
+from slack_message import task_failure_alert, task_done_alert
 from kombu_helper import drain_messages
 
 
@@ -28,7 +29,9 @@ def generate_ngl_link_op() -> None:
 
 # Op functions
 def drain_op(
-    dag: DAG, task_queue_name: str = TASK_QUEUE_NAME, queue: str = "manager",
+    dag: DAG,
+    task_queue_name: Optional[str] = TASK_QUEUE_NAME,
+    queue: Optional[str] = "manager",
 ) -> Operator:
     """Drains leftover messages from the RabbitMQ."""
     from airflow import configuration as conf
@@ -75,8 +78,9 @@ def manager_op(dag: DAG, synaptor_task_name: str, queue: str = "manager") -> Ope
 def generate_op(
     dag: DAG,
     taskname: str,
-    op_queue_name: str = "manager",
-    task_queue_name: str = TASK_QUEUE_NAME,
+    op_queue_name: Optional[str] = "manager",
+    task_queue_name: Optional[str] = TASK_QUEUE_NAME,
+    tag: Optional[str] = None,
 ) -> Operator:
     """Generates tasks to run and adds them to the RabbitMQ."""
     from airflow import configuration as conf
@@ -93,10 +97,12 @@ def generate_op(
     # these variables will be mounted in the containers
     variables = add_secrets_if_defined(["synaptor_param"])
 
+    task_id = f"generate_{taskname}" if tag is None else f"generate_{taskname}_{tag}"
+
     return worker_op(
         variables=variables,
         mount_point=MOUNT_POINT,
-        task_id=f"generate_{taskname}",
+        task_id=task_id,
         command=command,
         force_pull=True,
         on_failure_callback=task_failure_alert,
@@ -112,8 +118,9 @@ def generate_op(
 def synaptor_op(
     dag: DAG,
     i: int,
-    op_queue_name: str = "synaptor-cpu",
-    task_queue_name: str = TASK_QUEUE_NAME,
+    op_queue_name: Optional[str] = "synaptor-cpu",
+    task_queue_name: Optional[str] = TASK_QUEUE_NAME,
+    tag: Optional[str] = None,
 ) -> Operator:
     """Runs a synaptor worker until it receives a kill task."""
     from airflow import configuration as conf
@@ -131,19 +138,22 @@ def synaptor_op(
     # these variables will be mounted in the containers
     variables = add_secrets_if_defined(["synaptor_param"])
 
+    task_id = f"worker_{i}" if tag is None else f"worker_{tag}_{i}"
+
     return worker_op(
         variables=variables,
         mount_point=MOUNT_POINT,
-        task_id=f"worker_{i}",
+        task_id=task_id,
         command=command,
         force_pull=True,
-        on_retry_callback=task_retry_alert,
         image=SYNAPTOR_IMAGE,
         priority_weight=100_000,
         weight_rule=WeightRule.ABSOLUTE,
         queue=op_queue_name,
         dag=dag,
         qos=False,  # turns off a 5 minute failure timer
+        retries=100,
+        retry_exponential_backoff=False,
     )
 
 

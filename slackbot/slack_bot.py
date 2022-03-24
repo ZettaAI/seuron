@@ -8,7 +8,8 @@ from airflow_api import get_variable, run_segmentation, \
     update_slack_connection, check_running, dag_state, set_variable, \
     sanity_check, chunkflow_set_env, run_inference, run_contact_surface, \
     mark_dags_success, run_dag, run_igneous_tasks, run_custom_tasks, \
-    synaptor_sanity_check, run_synaptor_file_seg
+    synaptor_sanity_check, run_synaptor_file_seg, run_synaptor_db_seg, \
+    run_synaptor_assignment
 from bot_info import slack_token, botid, workerid, broker_url
 from kombu_helper import drain_messages
 from google_metadata import get_project_data, get_instance_data, get_instance_metadata, set_instance_metadata, gce_external_ip
@@ -311,7 +312,32 @@ def synaptor_file_seg(msg):
 
     replyto(msg, "Running synaptor file segmentation. Please wait.")
     create_run_token(msg)
+    update_metadata(msg)
     run_synaptor_file_seg()
+
+
+def synaptor_db_seg(msg):
+    """Runs the file segmentation DAG."""
+    if check_running():
+        replyto(msg, "Busy right now")
+        return
+
+    replyto(msg, "Running synaptor file segmentation. Please wait.")
+    create_run_token(msg)
+    update_metadata(msg)
+    run_synaptor_db_seg()
+
+
+def synaptor_assignment(msg):
+    """Runs the file segmentation DAG."""
+    if check_running():
+        replyto(msg, "Busy right now")
+        return
+
+    replyto(msg, "Running synaptor synapse assignment. Please wait.")
+    create_run_token(msg)
+    update_metadata(msg)
+    run_synaptor_assignment()
 
 
 def run_igneous_scripts(msg):
@@ -403,6 +429,7 @@ def dispatch_command(cmd, msg):
         update_inference_param(msg)
     elif cmd.startswith("cancelrun"):
         token = get_variable("run_token")
+        print(f"run_token: {token}")
         if not token:
             replyto(msg, "The bot is idle, nothing to cancel")
         elif cmd != "cancelrun"+token:
@@ -496,6 +523,16 @@ def dispatch_command(cmd, msg):
                  "runsynaptorsegmentation(file)",
                  "runsynaptorfilesegmentation"]:
         synaptor_file_seg(msg)
+    elif cmd in ["runsynaptordbseg",
+                 "runsynaptordatabaseseg",
+                 "runsynaptordbsegmentation",
+                 "runsynaptordatabasesegmentation",
+                 "runsynaptorsegmentation(db)",
+                 "runsynaptorsegmentation(database)"]:
+        synaptor_db_seg(msg)
+    elif cmd in ["runsynaptorassignment",
+                 "runsynaptorsynapseassignment"]:
+        synaptor_assignment(msg)
     else:
         replyto(msg, "Sorry I do not understand, please try again.")
 

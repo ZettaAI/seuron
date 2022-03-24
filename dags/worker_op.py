@@ -18,4 +18,7 @@ def worker_op(**kwargs):
         queue=kwargs["queue"],
         dag=kwargs["dag"],
         qos=kwargs.get("qos", True),
+        retries=kwargs.get("retries", 0),
+        retry_delay=kwargs.get("retry_delay", 60),
+        retry_exponential_backoff=kwargs.get("retry_exponential_backoff", False),
     )
