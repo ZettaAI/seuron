@@ -12,7 +12,14 @@ from airflow.utils import timezone
 
 from sqlalchemy.orm import exc
 
-seuron_dags = ['sanity_check', 'segmentation','watershed','agglomeration', 'chunkflow_worker', 'chunkflow_generator', 'contact_surface', "igneous", "custom-cpu", "custom-gpu"]
+seuron_dags = [
+    'sanity_check', 'segmentation', 'watershed', 'agglomeration',
+    'chunkflow_worker', 'chunkflow_generator',
+    'contact_surface', "igneous",
+    "custom-cpu", "custom-gpu",
+    "synaptor_sanity_check", "synaptor_assignment",
+    "synaptor_db_seg", "synaptor_file_seg"
+]
 
 
 def latest_task():
@@ -65,6 +72,7 @@ def update_user_info(userid):
 
 
 def check_running():
+    """Checks whether the DAGs within the seuron_dags list (above) is running."""
     for d in seuron_dags:
         state, exec_date = dag_state(d)
         if state == "running":
