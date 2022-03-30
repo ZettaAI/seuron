@@ -281,6 +281,9 @@ wait_pick_edge = wait_op(assign_dag, "pick_edge")
 generate_merge_dups = generate_op(assign_dag, "merge_dups")
 wait_merge_dups = wait_op(assign_dag, "merge_dups")
 
+generate_merge_dup_maps = generate_op(assign_dag, "merge_dup_maps")
+wait_merge_dup_maps = wait_op(assign_dag, "merge_dup_maps")
+
 generate_remap = generate_op(assign_dag, "remap")
 wait_remap = wait_op(assign_dag, "remap")
 
@@ -340,6 +343,8 @@ drain >> sanity_check >> init_cloudvols >> init_db  # >> generate_ngl_link
     >> wait_pick_edge
     >> generate_merge_dups
     >> wait_merge_dups
+    >> generate_merge_dup_maps
+    >> wait_merge_dup_maps
     >> generate_remap
     >> wait_remap
     >> generate_self_destruct_cpu1
