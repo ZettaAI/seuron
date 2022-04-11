@@ -1,3 +1,4 @@
+from typing import Optional
 import slack_sdk as slack
 from slack_sdk.rtm_v2 import RTMClient
 import json
@@ -9,7 +10,7 @@ from airflow_api import get_variable, run_segmentation, \
     sanity_check, chunkflow_set_env, run_inference, run_contact_surface, \
     mark_dags_success, run_dag, run_igneous_tasks, run_custom_tasks, \
     synaptor_sanity_check, run_synaptor_file_seg, run_synaptor_db_seg, \
-    run_synaptor_assignment, cluster_exists
+    run_synaptor_assignment, run_corgie, run_corgie_sanity_check, cluster_exists
 from bot_info import slack_token, botid, workerid, broker_url, slack_notification_channel
 from kombu_helper import drain_messages
 from google_metadata import get_project_data, get_instance_data, get_instance_metadata, set_instance_metadata, gce_external_ip
@@ -95,6 +96,59 @@ def extract_command(msg):
     return "".join(cmd.split())
 
 
+def parse_corgie_arg(
+    command: str, flag: str, remove: bool = True
+) -> tuple[str, Optional[str]]:
+    words = command.split(" ")
+    if flag in words:
+        index = words.index(flag)
+
+        if len(words) < index + 2:
+            raise ValueError(f"Can't parse {flag} from text: {command}")
+        arg = words[index + 1]
+
+        if remove:
+            # removing this arg from the command for further steps
+            cleaned = " ".join(words[:index] + words[index + 2:])
+            return cleaned, arg
+        else:
+            return command, arg
+    else:
+        return command, None
+
+
+def extract_corgie_command(msg: dict) -> Optional[str]:
+    """Tries to extract a corgie command from the message text.
+
+    Args:
+       msg: slack event dict from RTM client
+
+    Returns:
+       The parsed command string or None if no '`'s are in the msg text.
+
+    Raises:
+        ValueError: "`" is contained in the string, but the cmd isn't found
+    """
+    text = msg["text"]
+    match = re.match(".*```(.*)```", text, flags=re.DOTALL)
+    if match:
+        rawgroup = match.groups()[0]
+        newlinesremoved = rawgroup.replace("\n", "").replace("\\", "")
+        # slack adds '<>' to URLs
+        cleaned = newlinesremoved.replace("<", "").replace(">", "")
+
+        cleaned, dockerimage = parse_corgie_arg(cleaned, "--corgie_image")
+        cleaned, queuename = parse_corgie_arg(cleaned, "--queue_name", remove=False)
+
+        return cleaned, dockerimage, queuename
+
+    elif '`' in text:
+        raise ValueError(f"Can't parse command from text: {text}")
+
+    else:
+        return None, None, None
+
+
 def replyto(msg, reply, username=workerid, broadcast=False):
     sc = slack.WebClient(slack_token, timeout=300)
     channel = msg['channel']
@@ -149,6 +203,8 @@ def cancel_run(msg):
     drain_messages(broker_url, "custom-gpu")
     drain_messages(broker_url, "chunkflow")
     drain_messages(broker_url, "synaptor")
+    # corgie doesn't use RabbitMQ yet
+    # drain_messages(broker_url, "corgie")
     time.sleep(10)
 
     # Shutting down clusters again in case a scheduled task
@@ -400,6 +456,99 @@ def warm_up(msg: dict) -> None:
         replyto(msg, f"Unable to warm up {clustername}: ({type(e)}, {str(e)})")
 
 
+def set_corgie_cluster(msg: dict, cluster: str) -> None:
+    """Sets the corgie cluster to CPU/GPU."""
+    if check_running():
+        replyto(msg, "Please wait until the cluster is idle."
+                " Changing the cluster while a command is running could cause"
+                " problems.")
+        return
+
+    if cluster in ["cpu", "corgie-cpu"]:
+        set_variable("active_corgie_cluster", "corgie-cpu")
+        replyto(msg, "corgie cluster set to: `corgie-cpu`")
+
+    elif cluster in ["gpu", "corgie-gpu"]:
+        set_variable("active_corgie_cluster", "corgie-gpu")
+        replyto(msg, "corgie cluster set to: `corgie-gpu`")
+
+    else:
+        # the exception here acts as a signal not to run anything else
+        raise ValueError(f"ERROR: cluster type `{cluster}` not recognized")
+
+
+def corgie_sanity_check(msg: dict) -> None:
+    """Runs the corgie_sanity_check DAG."""
+    try:
+        command, dockerimage, queuename = extract_corgie_command(msg)
+    except ValueError as e:
+        replyto(msg, str(e))
+        return
+
+    if command is None:
+        command = get_variable("corgie_command")
+    else:
+        set_variable("corgie_command", command)
+
+    if dockerimage is not None:
+        set_variable("corgie_image", dockerimage)
+        replyto(msg, f"Set corgie image to: `{dockerimage}`")
+
+    if queuename is not None:
+        set_variable("corgie_queue_name", queuename)
+        replyto(msg, f"Set corgie queue name to: `{queuename}`")
+
+    replyto(msg, "Running corgie sanity check. Please wait")
+    run_corgie_sanity_check()
+
+
+def corgie_command(msg: dict, cluster: str = "cpu") -> None:
+    """Parses a corgie command from the message and runs it."""
+    try:
+        command, dockerimage, queuename = extract_corgie_command(msg)
+    except ValueError as e:
+        replyto(msg, str(e))
+        return
+
+    # Politely deny request if busy
+    currently_running = check_running()
+    if currently_running and command is not None:
+        set_variable("corgie_command", command)
+        replyto(msg, "Busy right now, but I've saved the command")
+        return
+    elif currently_running:
+        replyto(msg, "Busy right now")
+        return
+
+    # Set the cluster type
+    try:
+        set_corgie_cluster(msg, cluster)
+    except ValueError as e:
+        replyto(msg, str(e))
+        return
+
+    # Set the docker image
+    if dockerimage is not None:
+        set_variable("corgie_image", dockerimage)
+        replyto(msg, f"Set corgie image to: `{dockerimage}`")
+
+    if queuename is not None:
+        set_variable("corgie_queue_name", queuename)
+        replyto(msg, f"Set corgie queue name to: `{queuename}`")
+
+    # Run (a possibly previous) command
+    if command is None:
+        command = get_variable("corgie_command")
+        replyto(msg, f"Running previously saved command:\n```{command}```")
+    else:
+        set_variable("corgie_command", command)
+        replyto(msg, f"Running command:\n```{command}```")
+
+    create_run_token(msg)
+    update_metadata(msg)
+    run_corgie()
+
+
 def run_igneous_scripts(msg):
     _, payload = download_file(msg)
     if payload:
@@ -591,6 +740,13 @@ def dispatch_command(cmd, msg):
         synaptor_assignment(msg)
     elif cmd.startswith("warmup"):
         warm_up(msg)
+    elif cmd.startswith("runcorgiecpucommand"):
+        corgie_command(msg, "cpu")
+    elif cmd.startswith("runcorgiecpucommand"):
+        corgie_command(msg, "gpu")
+    # This is guaranteed to break at the moment - sanity check not implemented
+    # elif cmd.startswith("runcorgiesanitycheck"):
+    #     corgie_sanity_check(msg)
     else:
         replyto(msg, "Sorry I do not understand, please try again.")
 
