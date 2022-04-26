@@ -109,6 +109,8 @@ def corgie_worker_op(
     variables = {
         "aws-secret.json": "/root/.cloudvolume/secrets",
         "credentials": "/root/.aws",
+        # modelhouse has a bug with default creds in some containers
+        "google-secret.json": "/root/.cloudvolume/secrets",
     }
 
     command = f"corgie-worker --queue_name {queueurl} --lease_seconds 600 --verbose"
