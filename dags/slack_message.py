@@ -87,7 +87,18 @@ def slack_alert(msg, context):
 
 
 def task_start_alert(context):
-    return slack_alert(":arrow_forward: Task Started", context)
+    from airflow.models import Variable
+    import urllib.parse
+    ti = context.get('task_instance')
+    iso = urllib.parse.quote(ti.execution_date.isoformat())
+    webui_ip = Variable.get("webui_ip")
+    log_url = "https://"+webui_ip + (
+        "/airflow/log"
+        "?dag_id={ti.dag_id}"
+        "&task_id={ti.task_id}"
+        "&execution_date={iso}"
+    ).format(**locals())
+    return slack_alert(f":arrow_forward: Task Started. See log here: {log_url}", context)
 
 
 def task_retry_alert(context):
