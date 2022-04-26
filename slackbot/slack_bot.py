@@ -111,31 +111,13 @@ def extract_corgie_command(msg: dict) -> Optional[str]:
     match = re.match(".*```(.*)```", text, flags=re.DOTALL)
     if match:
         rawgroup = match.groups()[0]
+        spacesremoved = rawgroup.replace("\n", "").replace("\\", "")
         # slack adds '<>' to URLs
-        return rawgroup.replace("<", "").replace(">", "")
+        return spacesremoved.replace("<", "").replace(">", "")
     elif '`' in text:
         raise ValueError(f"Can't parse command from text: {text}")
     else:
         return None
-
-
-def extract_corgie_cluster(msg: dict) -> str:
-    """Extracts the cluster setting for corgie.
-
-    Looks for the last use of the last word in the cluster command, and
-    return the stripped string beyond that.
-    """
-    final_cmd_word = "cluster"
-    text = msg["text"]
-
-    while True:
-        next_index = text.find(final_cmd_word)
-        if next_index == -1:
-            break
-
-        text = text[next_index+len(final_cmd_word):]
-
-    return text.strip()
 
 
 def replyto(msg, reply, username=workerid, broadcast=False):
@@ -394,15 +376,13 @@ def synaptor_assignment(msg):
     run_synaptor_assignment()
 
 
-def set_corgie_cluster(msg: dict) -> None:
+def set_corgie_cluster(msg: dict, cluster: str) -> None:
     """Sets the corgie cluster to CPU/GPU."""
     if check_running():
         replyto(msg, "Please wait until the cluster is idle."
                 " Changing the cluster while a command is running could cause"
                 " problems.")
         return
-
-    cluster = extract_corgie_cluster(msg)
 
     if cluster in ["cpu", "corgie-cpu"]:
         set_variable("active_corgie_cluster", "corgie-cpu")
@@ -413,7 +393,8 @@ def set_corgie_cluster(msg: dict) -> None:
         replyto(msg, "corgie cluster set to: corgie-gpu")
 
     else:
-        replyto(msg, f"ERROR: cluster type {cluster} not recognized")
+        # the exception here acts as a signal not to run anything else
+        raise ValueError(f"ERROR: cluster type {cluster} not recognized")
 
 
 def corgie_sanity_check(msg: dict) -> None:
@@ -433,14 +414,13 @@ def corgie_sanity_check(msg: dict) -> None:
     run_corgie_sanity_check()
 
 
-def corgie_command(msg) -> None:
+def corgie_command(msg: dict, cluster: str = "cpu") -> None:
     """Parses a corgie command from the message and runs it."""
     try:
         command = extract_corgie_command(msg)
     except ValueError as e:
         replyto(msg, str(e))
         return
-    set_variable("corgie_command", command)
 
     # Politely deny request if busy
     currently_running = check_running()
@@ -452,11 +432,19 @@ def corgie_command(msg) -> None:
         replyto(msg, "Busy right now")
         return
 
+    # Set the cluster type
+    try:
+        set_corgie_cluster(msg, cluster)
+    except ValueError as e:
+        replyto(msg, str(e))
+        return
+
     # Run (a possibly previous) command
     if command is None:
         command = get_variable("corgie_command")
         replyto(msg, f"Running previously saved command:\n```{command}```")
     else:
+        set_variable("corgie_command", command)
         replyto(msg, f"Running command:\n```{command}```")
 
     create_run_token(msg)
@@ -653,12 +641,13 @@ def dispatch_command(cmd, msg):
     elif cmd in ["runsynaptorassignment",
                  "runsynaptorsynapseassignment"]:
         synaptor_assignment(msg)
-    elif cmd.startswith("setcorgiecluster"):
-        set_corgie_cluster(msg)
-    elif cmd.startswith("runcorgiecommand"):
-        corgie_command(msg)
-    elif cmd.startswith("runcorgiesanitycheck"):
-        corgie_sanity_check(msg)
+    elif cmd.startswith("runcorgiecpucommand"):
+        corgie_command(msg, "cpu")
+    elif cmd.startswith("runcorgiegpucommand"):
+        corgie_command(msg, "gpu")
+    # This is guaranteed to break at the moment - sanity check not implemented
+    # elif cmd.startswith("runcorgiesanitycheck"):
+    #     corgie_sanity_check(msg)
     else:
         replyto(msg, "Sorry I do not understand, please try again.")
 
