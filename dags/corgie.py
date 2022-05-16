@@ -29,7 +29,10 @@ from helper_ops import (
 )
 
 
-CORGIE_IMAGE = "gcr.io/zetta-lee-fly-vnc-001/test-worm-alignment-redo"
+CORGIE_IMAGE = Variable.get(
+    "corgie_image",
+    "gcr.io/zetta-jlichtman-zebrafish-001/test-worm-alignment-redo:dodam",
+)
 CORGIE_CLUSTERS = ["corgie-cpu", "corgie_gpu"]
 CLUSTER = Variable.get("active_corgie_cluster", "corgie-gpu")
 COMMAND = Variable.get("corgie_command", "")
@@ -104,7 +107,7 @@ def corgie_worker_op(
 ) -> Operator:
     """An operator fn for running the corgie workers."""
     # temporary for testing
-    queueurl = "seuron-corgie-testing"
+    queue_name = Variable.get("corgie_queue_name", "seuron-corgie-testing")
     # temporary while we use SQS
     variables = {
         "aws-secret.json": "/root/.cloudvolume/secrets",
@@ -113,7 +116,7 @@ def corgie_worker_op(
         "google-secret.json": "/root/.cloudvolume/secrets",
     }
 
-    command = f"corgie-worker --queue_name {queueurl} --lease_seconds 600 --verbose"
+    command = f"corgie-worker --queue_name {queue_name} --lease_seconds 600 --verbose"
     return worker_op(
         task_id=f"corgie_worker_{worker_id}",
         command=command,
