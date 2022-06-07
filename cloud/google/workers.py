@@ -2,8 +2,9 @@ from common import GlobalComputeUrl, ZonalComputeUrl, GenerateBootDisk, Generate
 from common import INSTALL_DOCKER_CMD, INSTALL_NVIDIA_DOCKER_CMD, DOCKER_CMD, CELERY_CMD, PARALLEL_CMD
 
 
-GPU_TYPES = ['gpu', 'custom-gpu', 'synaptor-gpu']
+GPU_TYPES = ['gpu', 'custom-gpu', 'synaptor-gpu', 'corgie-gpu']
 SYNAPTOR_TYPES = ['synaptor-cpu', 'synaptor-gpu', 'synaptor-seggraph']
+CORGIE_TYPES = ['corgie-cpu', 'corgie-gpu']
 
 
 def GenerateEnvironVar(context, env_variables):
@@ -72,6 +73,8 @@ def GenerateWorkers(context, hostname_manager, worker):
     elif worker['type'] == 'custom-gpu':
         cmd = GenerateDockerCommand(docker_image, docker_env+['-e CONDA_INSTALL_PYTORCH="true"']) + ' ' + PARALLEL_CMD % {'cmd': "custom/worker_gpu.sh", 'jobs': 2}
     elif worker['type'] in SYNAPTOR_TYPES:
+        cmd = GenerateCeleryWorkerCommand(docker_image, docker_env+['-p 8793:8793'], queue=worker['type'], concurrency=1)
+    elif worker['type'] in CORGIE_TYPES:
         cmd = GenerateCeleryWorkerCommand(docker_image, docker_env+['-p 8793:8793'], queue=worker['type'], concurrency=1)
     else:
         raise ValueError(f"unknown worker type: {worker['type']}")
