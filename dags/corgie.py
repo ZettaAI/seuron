@@ -168,7 +168,7 @@ corgie_dag = DAG(
 # skipping sanity checks until the function is implemented
 # sanity_check = sanity_check_op(corgie_dag, COMMAND)
 scale_up_cluster = scale_up_cluster_op(
-    corgie_dag, "corgie", CLUSTER, 1, MAX_CLUSTER_SIZE, "cluster"
+    corgie_dag, "corgie", CLUSTER, 64, MAX_CLUSTER_SIZE, "cluster"
 )
 workers = [corgie_worker_op(corgie_dag, i) for i in range(MAX_CLUSTER_SIZE)]
 run_corgie = corgie_manager_op(corgie_dag, COMMAND)
