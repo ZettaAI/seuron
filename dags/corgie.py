@@ -31,7 +31,7 @@ from helper_ops import (
 
 CORGIE_IMAGE = Variable.get(
     "corgie_image",
-    "gcr.io/zetta-jlichtman-zebrafish-001/test-worm-alignment-redo:dodam",
+    "gcr.io/zetta-lee-fly-vnc-001/corgie:ppc-001-alignment",
 )
 CORGIE_CLUSTERS = ["corgie-cpu", "corgie_gpu"]
 CLUSTER = Variable.get("active_corgie_cluster", "corgie-gpu")
