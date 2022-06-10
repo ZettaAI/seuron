@@ -6,15 +6,15 @@ imports:
     - path: deployment.py
 
 resources:
-    - name: deployment
+    - name: thewhitehand
       type: deployment.py
       properties:
           zone: us-east1-c
           subnetwork: us-east1
-          seuronImage: ranlu/seuron:main
+          seuronImage: gcr.io/zetta-lee-fly-vnc-001/seuron:ppc-001-alignment
           project: segmentation
-          managerMachineType: e2-medium
-          composeLocation: https://raw.githubusercontent.com/seung-lab/seuron/main/deploy/docker-compose-CeleryExecutor.yml
+          managerMachineType: e2-standard-32
+          composeLocation: https://raw.githubusercontent.com/ZettaAI/seuron/main/deploy/docker-compose-CeleryExecutor.yml
           slack:
             botToken: # bot token for slack
             notificationChannel: seuron-alerts
@@ -24,7 +24,7 @@ resources:
           airflow:
             fernetKey: FERNET_KEY
             secretKey: SECRET_KEY
-            remoteLogFolder: # GCS path to save airflow logs
+            remoteLogFolder: gs://seuronbot_zetta_lee_fly_vnc_001_grima
             user: # username for airflow services
             password: # password for airflow services
           postgres:
@@ -124,15 +124,15 @@ resources:
             - type: corgie-cpu
               zone: us-east1-c
               subnetwork: us-east1
-              machineType: e2-standard-32
+              machineType: e2-highmem-4
               preemptible: True
-              sizeLimit: 10
+              sizeLimit: 500
             - type: corgie-gpu
               zone: us-east1-c
               subnetwork: us-east1
               machineType: n1-highmem-8
               gpuWorkerAcceleratorType: nvidia-tesla-t4
               preemptible: True
-              sizeLimit: 10
+              sizeLimit: 500
           firewallAllowedIPRanges:
               - 128.112.0.0/16
