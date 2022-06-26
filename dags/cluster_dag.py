@@ -63,6 +63,9 @@ def cluster_control():
         if key in target_sizes:
             print(f"processing cluster: {key}")
             if target_sizes[key] != 0:
+
+                # counting the number of tasks in the relevant queues
+                # (for comparison w/ # workers below)
                 try:
                     if key == "composite":
                         tasks = [check_queue(f"{key}_{i}") for i in range(5,11)]
@@ -74,7 +77,12 @@ def cluster_control():
                 except:
                     slack_message(":exclamation:Failed to get the {} cluster information from google.".format(key), notification=True)
                     continue
+
+                # if the # remaining tasks is lower than
+                # the # workers, start shrinking the worker pool
                 if num_tasks < total_size:
+                    # if # active workers is > 10x larger than the # tasks
+                    # cut the workers down by a factor of 10
                     if 10 < num_tasks < total_size//10:
                         target_sizes[key] = total_size//10
                         gapi.resize_instance_group(project_id, cluster_info[key], target_sizes[key])
@@ -83,10 +91,14 @@ def cluster_control():
                     if num_tasks < target_sizes[key]:
                         target_sizes[key] = num_tasks
 
+                # if the # active workers is greater than 10% away from its target,
+                # consider it to be stabilizing and repeat the last target
                 if (total_target_size - total_size) > 0.1 * total_target_size:
                     slack_message(":exclamation: cluster {} is still stabilizing, {} of {} instances created".format(key, total_size, total_target_size))
                     if (total_target_size > 0):
                         gapi.resize_instance_group(project_id, cluster_info[key], total_target_size)
+
+                # otherwise we can set a new target
                 else:
                     if total_target_size < target_sizes[key] and total_target_size != 0:
                         max_size = 0
