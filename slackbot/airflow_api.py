@@ -115,6 +115,13 @@ def set_variable(key, value, serialize_json=False):
     Variable.set(key, value, serialize_json=serialize_json)
 
 
+def cluster_exists(cluster_name: str) -> bool:
+    """Checks whether an instance group is managed by this cluster."""
+    cluster_info = json.loads(BaseHook.get_connection("InstanceGroups").extra)
+
+    return cluster_name in cluster_info
+
+
 def __latest_dagrun_state(dag_id):
     print("check dag states")
     dagbag = DagBag()
