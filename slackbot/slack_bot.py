@@ -9,17 +9,18 @@ from airflow_api import get_variable, run_segmentation, \
     sanity_check, chunkflow_set_env, run_inference, run_contact_surface, \
     mark_dags_success, run_dag, run_igneous_tasks, run_custom_tasks, \
     synaptor_sanity_check, run_synaptor_file_seg, run_synaptor_db_seg, \
-    run_synaptor_assignment
+    run_synaptor_assignment, cluster_exists
 from bot_info import slack_token, botid, workerid, broker_url, slack_notification_channel
 from kombu_helper import drain_messages
 from google_metadata import get_project_data, get_instance_data, get_instance_metadata, set_instance_metadata, gce_external_ip
+from warm_up import init_timestamp
 from copy import deepcopy
 import requests
 import re
 import time
 import logging
 from secrets import token_hex
-from datetime import datetime
+from datetime import datetime, timedelta
 import threading
 import queue
 import subprocess
@@ -114,15 +115,24 @@ def replyto(msg, reply, username=workerid, broadcast=False):
 
 def shut_down_clusters():
     cluster_size = get_variable('cluster_target_size', deserialize_json=True)
-    for k in cluster_size:
-        cluster_size[k] = 0
-    set_variable("cluster_target_size", cluster_size, serialize_json=True)
+    set_variable("cluster_target_size", {k: 0 for k in cluster_size}, serialize_json=True)
+
+    min_size = get_variable('cluster_min_size', deserialize_json=True)
+    set_variable(
+        "cluster_min_size",
+        {k: [0, init_timestamp()] for k in min_size},
+        serialize_json=True,
+    )
+
     run_dag("cluster_management")
+
+    # recording the minimum cluster sizes in case of a reboot
+    return min_size
 
 
 def cancel_run(msg):
     replyto(msg, "Shutting down clusters...")
-    shut_down_clusters()
+    orig_min_size = shut_down_clusters()
     time.sleep(10)
 
     replyto(msg, "Marking all DAG states to success...")
@@ -148,6 +158,10 @@ def cancel_run(msg):
     time.sleep(30)
 
     replyto(msg, "*Current run cancelled*", broadcast=True)
+
+    # Resetting minimum sizes
+    set_variable("cluster_min_size", orig_min_size, serialize_json=True)
+    run_dag("cluster_management")
 
 
 def upload_param(msg, param):
@@ -348,6 +362,40 @@ def synaptor_assignment(msg):
     run_synaptor_assignment()
 
 
+def warm_up(msg: dict) -> None:
+    """Sets the min size variable for a cluster and runs cluster_management."""
+
+    def extract_clustername(text):
+        cmd = text.split(",")[-1]
+        return cmd.replace("warm up", "").strip()
+
+    clustername = extract_clustername(msg["text"])
+    update_metadata(msg)
+
+    try:
+        if cluster_exists(clustername):
+            min_sizes = get_variable('cluster_min_size', deserialize_json=True)
+            target_sizes = get_variable('cluster_target_size', deserialize_json=True)
+
+            expiration = (datetime.utcnow() + timedelta(hours=1)).isoformat()
+
+            min_sizes[clustername] = [10, expiration]
+            target_sizes[clustername] = target_sizes.get(clustername, 0)
+
+            set_variable("cluster_min_size", min_sizes, serialize_json=True)
+            set_variable("cluster_target_size", target_sizes, serialize_json=True)
+            replyto(msg, f":fire: cluster {clustername} warming up")
+
+            run_dag("cluster_management")
+
+        else:
+            replyto(msg, f"cluster {clustername} not found. Please try again.")
+
+    except Exception as e:
+        logger.debug(f"{type(e)}, {str(e)}")
+        replyto(msg, f"Unable to warm up {clustername}: ({type(e)}, {str(e)})")
+
+
 def run_igneous_scripts(msg):
     _, payload = download_file(msg)
     if payload:
@@ -537,6 +585,8 @@ def dispatch_command(cmd, msg):
     elif cmd in ["runsynaptorassignment",
                  "runsynaptorsynapseassignment"]:
         synaptor_assignment(msg)
+    elif cmd.startswith("warmup"):
+        warm_up(msg)
     else:
         replyto(msg, "Sorry I do not understand, please try again.")
 
