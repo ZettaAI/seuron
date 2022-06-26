@@ -17,6 +17,7 @@ from airflow.hooks.base_hook import BaseHook
 from airflow.operators.python import PythonOperator
 from airflow.operators.latest_only import LatestOnlyOperator
 
+from warm_up import get_min_size
 from slack_message import slack_message
 import google_api_helper as gapi
 import json
@@ -56,14 +57,18 @@ def cluster_control():
         project_id = gapi.get_project_id()
         cluster_info = json.loads(BaseHook.get_connection("InstanceGroups").extra)
         target_sizes = Variable.get("cluster_target_size", deserialize_json=True)
+        min_sizes = Variable.get("cluster_min_size", deserialize_json=True)
     except:
         slack_message(":exclamation:Failed to load the cluster information from connection {}".format("InstanceGroups"), notification=True)
         return
     for key in cluster_info:
         if key in target_sizes:
             print(f"processing cluster: {key}")
-            if target_sizes[key] != 0:
 
+            min_size = get_min_size(key, min_sizes)
+            max_size = sum(ig["max_size"] for ig in cluster_info[key])
+
+            if target_sizes[key] != 0 or min_size != 0:
                 # counting the number of tasks in the relevant queues
                 # (for comparison w/ # workers below)
                 try:
@@ -85,7 +90,11 @@ def cluster_control():
                     # cut the workers down by a factor of 10
                     if 10 < num_tasks < total_size//10:
                         target_sizes[key] = total_size//10
-                        gapi.resize_instance_group(project_id, cluster_info[key], target_sizes[key])
+                        gapi.resize_instance_group(
+                            project_id,
+                            cluster_info[key],
+                            max(target_sizes[key], min_size),
+                        )
                     continue
                 else:
                     if num_tasks < target_sizes[key]:
@@ -100,19 +109,24 @@ def cluster_control():
 
                 # otherwise we can set a new target
                 else:
-                    if total_target_size < target_sizes[key] and total_target_size != 0:
-                        max_size = 0
-                        for ig in cluster_info[key]:
-                            max_size += ig['max_size']
+                    # (using the min size)
+                    if target_sizes[key] < min_size:
+                        new_target_size = min(min_size, max_size)
+                    # (using the target size)
+                    elif total_target_size < target_sizes[key] and total_target_size != 0:
                         new_target_size = min([target_sizes[key], total_target_size*2, max_size])
-                        if total_target_size != new_target_size:
-                            gapi.resize_instance_group(project_id, cluster_info[key], new_target_size)
-                            slack_message(":arrow_up: ramping up cluster {} from {} to {} instances".format(key, total_target_size, new_target_size))
+                    # (no new target needed)
                     else:
                         if (total_target_size != 0):
                             slack_message(":information_source: status of cluster {}: {} out of {} instances up and running".format(key, total_size, total_target_size), notification=True)
+                        continue
 
-            else:
+                    # actually scaling up the cluster
+                    if total_target_size != new_target_size:
+                        gapi.resize_instance_group(project_id, cluster_info[key], new_target_size)
+                        slack_message(":arrow_up: ramping up cluster {} from {} to {} instances".format(key, total_target_size, new_target_size))
+
+            else:  # target_size == 0 and min_size == 0
                 total_target_size = gapi.get_cluster_target_size(project_id, cluster_info[key])
                 if total_target_size != 0:
                     gapi.resize_instance_group(project_id, cluster_info[key], 0)
