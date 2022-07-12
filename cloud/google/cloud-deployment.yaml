@@ -13,7 +13,7 @@ resources:
           subnetwork: us-east1
           seuronImage: zettaai/seuron:corgie
           project: segmentation
-          managerMachineType: e2-medium
+          managerMachineType: e2-standard-4
           composeLocation: https://raw.githubusercontent.com/ZettaAI/seuron/main/deploy/docker-compose-CeleryExecutor.yml
           slack:
             botToken: # bot token for slack
@@ -124,15 +124,15 @@ resources:
             - type: corgie-cpu
               zone: us-east1-c
               subnetwork: us-east1
-              machineType: e2-standard-32
+              machineType: e2-highmem-2
               preemptible: True
-              sizeLimit: 10
+              sizeLimit: 1000
             - type: corgie-gpu
               zone: us-east1-c
               subnetwork: us-east1
-              machineType: n1-highmem-8
+              machineType: n1-highmem-4
               gpuWorkerAcceleratorType: nvidia-tesla-t4
               preemptible: True
-              sizeLimit: 10
+              sizeLimit: 1000
           firewallAllowedIPRanges:
               - 128.112.0.0/16
