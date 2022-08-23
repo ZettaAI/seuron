@@ -742,7 +742,7 @@ def dispatch_command(cmd, msg):
         warm_up(msg)
     elif cmd.startswith("runcorgiecpucommand"):
         corgie_command(msg, "cpu")
-    elif cmd.startswith("runcorgiecpucommand"):
+    elif cmd.startswith("runcorgiegpucommand"):
         corgie_command(msg, "gpu")
     # This is guaranteed to break at the moment - sanity check not implemented
     # elif cmd.startswith("runcorgiesanitycheck"):
