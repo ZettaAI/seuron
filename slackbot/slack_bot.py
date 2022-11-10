@@ -107,6 +107,10 @@ def parse_corgie_arg(
             raise ValueError(f"Can't parse {flag} from text: {command}")
         arg = words[index + 1]
 
+        # hyperlink processing
+        if "|" in arg:
+            arg = arg[arg.index("|")+1:]
+
         if remove:
             # removing this arg from the command for further steps
             cleaned = " ".join(words[:index] + words[index + 2:])
