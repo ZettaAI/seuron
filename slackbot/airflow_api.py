@@ -4,6 +4,7 @@ import functools
 import concurrent.futures
 
 from airflow import settings
+from airflow.hooks.base import BaseHook
 from airflow.models import DagBag, DagModel, Variable, Connection
 from airflow.models.dagrun import DagRun, DagRunType
 from airflow.api.common.mark_tasks import set_dag_run_state_to_success

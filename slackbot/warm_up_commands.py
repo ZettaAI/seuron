@@ -10,7 +10,7 @@ from airflow_api import cluster_exists, get_variable, set_variable, run_dag
     description="Keep at least 10 nodes running in a cluster for 1 hour",
     exclusive=True,  # updates "task owner" for slack responses
     cancelable=False,
-    extra_parameters=False,
+    extra_parameters=True,
 )
 def warm_up(msg: dict) -> None:
     """Sets the min size variable for a cluster and runs cluster_management."""
