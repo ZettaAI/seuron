@@ -2,7 +2,7 @@ from seuronbot import SeuronBot
 from airflow_api import set_variable, run_dag
 
 from bot_info import broker_url
-from bot_utils import download_json, clear_queues, replyto
+from bot_utils import download_file, download_json, clear_queues, replyto
 import kombu_helper
 
 
@@ -23,7 +23,11 @@ def update_deepem_params(msg):
 
 
 @SeuronBot.on_message("run deepem train",
-                      description="Run DeepEM training.")
+                      description="Run DeepEM training.",
+                      file_inputs=True)
 def deepem_run(msg):
-    replyto(msg, "Start DeepEM training.")
-    # run_dag("deepem_worker")
+    _, payload = download_file(msg)
+    if payload:
+        set_variable("deepem_command", payload)
+        replyto(msg, "Start DeepEM training.")
+        run_dag("deepem_train")
