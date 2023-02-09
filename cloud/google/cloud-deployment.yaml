@@ -114,5 +114,13 @@ resources:
               machineType: n2d-highmem-32
               preemptible: False
               sizeLimit: 1
+            - type: deepem-gpu
+              zone: us-east1-c
+              subnetwork: us-east1
+              machineType: n1-standard-16
+              gpuWorkerAcceleratorType: nvidia-tesla-t4
+              gpuWorkerAcceleratorCount: 4
+              preemptible: True
+              sizeLimit: 10
           firewallAllowedIPRanges:
               - 128.112.0.0/16

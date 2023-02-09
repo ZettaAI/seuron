@@ -20,7 +20,7 @@ TASK_QUEUE_NAME = "deepem"
 def deepem_op(
     dag: DAG,
     worker_id: int,
-    queue: Optional[str] = "synaptor-gpu"
+    queue: Optional[str] = "deepem-gpu"
 ) -> Operator:
     """Run a DeepEM worker."""
     variables = add_secrets_if_defined([])

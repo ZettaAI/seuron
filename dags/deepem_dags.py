@@ -30,10 +30,10 @@ train_dag = DAG(
 
 # OP INSTANTIATION
 scale_up_cluster = scale_up_cluster_op(
-    train_dag, "deepem", "synaptor-gpu", 1, 1, "cluster"
+    train_dag, "deepem", "deepem-gpu", 1, 1, "cluster"
 )
 scale_down_cluster = scale_down_cluster_op(
-    train_dag, "deepem", "synaptor-gpu", 0, "cluster"
+    train_dag, "deepem", "deepem-gpu", 0, "cluster"
 )
 
 
