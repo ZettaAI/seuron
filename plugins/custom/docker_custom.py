@@ -246,7 +246,9 @@ class DockerConfigurableOperator(DockerOperator):
                 'mounts': self.mounts,
                 'cpu_shares': cpu_shares,
                 'mem_limit': self.mem_limit,
-                'network_mode': self.network_mode
+                'network_mode': self.network_mode,
+                'shm_size': self.shm_size,
+                'ipc_mode': self.ipc_mode
             }
             host_args.update(self.host_args)
 

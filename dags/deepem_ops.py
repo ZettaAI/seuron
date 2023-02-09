@@ -38,7 +38,8 @@ def deepem_op(
         priority_weight=100_000,
         weight_rule=WeightRule.ABSOLUTE,
         queue=queue,
-        dag=dag
+        dag=dag,
+        shm_size=4*(2**30), # 4 GiB
     )
 
 
