@@ -55,6 +55,10 @@ default_synaptor_param = {
     "Workflow": dict(maxclustersize=1)
 }
 
+deepem_param_default = {
+    "DEEPEM_IMAGE": "kisuk/deepem:zettasets"
+}
+
 default_args = {
     'owner': 'seuronbot',
     'depends_on_past': False,

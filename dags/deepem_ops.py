@@ -13,7 +13,6 @@ from worker_op import worker_op
 
 # Hard-code these for now
 MOUNT_POINT = "/root/.cloudvolume/secrets/"
-DEEPEM_IMAGE = "gcr.io/zetta-lee-fly-vnc-001/deepem:expt0"
 TASK_QUEUE_NAME = "deepem"
 
 
@@ -25,8 +24,12 @@ def deepem_op(
     """Run a DeepEM worker."""
     variables = add_secrets_if_defined([])
 
+    # DeepEM command
     command = Variable.get("deepem_command")
     command = " ".join(parsecmd(command))
+
+    # DeepEM image
+    param = Variable.get("deepem_param.json", deserialize_json=True)
 
     return worker_op(
         variables=variables,
@@ -34,7 +37,7 @@ def deepem_op(
         task_id=f"worker_{worker_id}",
         command=command,
         force_pull=True,
-        image=DEEPEM_IMAGE,
+        image=param.get("DEEPEM_IMAGE", "kisuk/deepem:zettasets"),
         priority_weight=100_000,
         weight_rule=WeightRule.ABSOLUTE,
         queue=queue,

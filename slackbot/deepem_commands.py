@@ -17,7 +17,7 @@ def update_deepem_params(msg):
         kombu_helper.drain_messages(broker_url, "deepem")
         kombu_helper.put_message(broker_url, "seuronbot_payload", json_obj)
         set_variable("deepem_param.json", json_obj, serialize_json=True)
-        # run_dag("deepem_generator")
+        replyto(msg, "Update DeepEM parameters.")
     else:
         replyto(msg, "Error reading file.")
 
