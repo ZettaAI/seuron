@@ -49,6 +49,7 @@ Variable.setdefault("param", param_default, deserialize_json=True)
 Variable.setdefault("inference_param", inference_param_default, deserialize_json=True)
 Variable.setdefault("deepem_param.json", deepem_param_default, deserialize_json=True)
 Variable.setdefault("deepem_command", "")
+Variable.setdefault("WANDB_API_KEY", "")
 
 db_utils.merge_conn(
         models.Connection(

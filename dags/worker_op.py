@@ -25,4 +25,5 @@ def worker_op(**kwargs):
         retry_exponential_backoff=kwargs.get("retry_exponential_backoff", default_args.get("retry_exponential_backoff", False)),
         shm_size=kwargs.get("shm_size", None),
         ipc_mode=kwargs.get("ipc_mode", None),
+        environment=kwargs.get("environment", None),
     )

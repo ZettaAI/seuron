@@ -31,8 +31,12 @@ def deepem_op(
     # DeepEM image
     param = Variable.get("deepem_param.json", deserialize_json=True)
 
+    # Environment variables
+    environment = {"WANDB_API_KEY": Variable.get("WANDB_API_KEY")}
+
     return worker_op(
         variables=variables,
+        environment=environment,
         mount_point=MOUNT_POINT,
         task_id=f"worker_{worker_id}",
         command=command,
