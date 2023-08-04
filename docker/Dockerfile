@@ -44,6 +44,7 @@ RUN savedAptMark="$(apt-mark showmanual)" \
     && pip install --no-cache-dir "apache-airflow[celery,postgres,rabbitmq,docker,slack,google,statsd]==${AIRFLOW_VERSION}" --constraint "${CONSTRAINT_URL}" \
     && pip install --no-cache-dir --compile --global-option=build git+https://github.com/seung-lab/chunk_iterator#egg=chunk-iterator \
     && pip install --no-cache-dir igneous-pipeline \
+    && pip install --no-cache-dir cirrus-volume \
     && pip install --no-cache-dir git+https://github.com/knossos-project/knossos_utils.git \
     && mkdir -p ${AIRFLOW_HOME}/version \
     && groupadd -r docker \
@@ -97,5 +98,6 @@ RUN chown -R ${AIRFLOW_USER} ${AIRFLOW_HOME}/.cloudvolume
 USER ${AIRFLOW_USER}
 RUN docker-credential-gcr configure-docker
 ENV NVIDIA_VISIBLE_DEVICES all
+ENV GIT_PYTHON_REFRESH quiet
 WORKDIR ${AIRFLOW_HOME}
 ENTRYPOINT ["scripts/entrypoint-dood.sh"]
