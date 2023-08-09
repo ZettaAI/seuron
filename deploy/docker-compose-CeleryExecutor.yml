@@ -218,6 +218,8 @@ services:
         deploy:
             restart_policy:
                 condition: any
+        networks:
+            - host
         #volumes:
             #- ../secrets:/run/secrets/
         command:
@@ -300,3 +302,6 @@ networks:
             driver: default
             config:
                 - subnet: 10.253.0.0/16
+    host:
+        name: host
+        external: true
